@@ -51,6 +51,7 @@ private:
     QSpinBox *dd2;
     QSpinBox *mm2;
     QDoubleSpinBox *ss2;
+    QPushButton *expo;
     //Status bar
     QStatusBar *SB;
     //carte

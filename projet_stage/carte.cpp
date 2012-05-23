@@ -189,6 +189,7 @@ void carte::sauvegarde_sous()
                  }
             }
             enregistrer = true;
+            file.close();
         }
     } else if (enregistrer==true){
 
@@ -207,7 +208,9 @@ void carte::sauvegarde_sous()
                      }
 
                 }
+                file.close();
             }
+
 }
 void carte::charger()
 {
@@ -216,24 +219,26 @@ void carte::charger()
 
     if (file.open(QFile::ReadOnly| QIODevice::Text | QIODevice::Truncate)) {
          QTextStream in(&file);
-         int i = 0;
-         /*QString ligne = readline(1);//attention vérifié si part de 1 ou de 0
-             if (compare(ligne,"<md5sum> ",...::insensitive)==0) {
-                 QString md5s = in.readline(2);
-                 if (md5s==md5) {
-                    QString lat,lat1,lon,lon1;
-                    lat= in.readline(5);
-                    lon= in.readline(7);
-                    lat1= in.readline(9);
-                    lon1=in.readline(11)
 
-                    if (compare())
-                        while(!EOF)//pas la bonne méthode prend fonction fin fichier qt
+         /*QString ligne = in.readLine(1);//attention vérifié si part de 1 ou de 0
+             if (compare(ligne,"<md5sum> ",Qt::CaseInsensitive)==0) {
+                 QString md5s = in.readline(2);
+                 if (compare() {
+                    dec.setLatitude= QString::number(in.readLine(5));
+                    dec.setLongitude= QString::number(in.readLine(8));
+                    dec1.setLatitude= QString::number(in.readLine(11));
+                    dec1.setLongitude= QString::number(in.readLine(14));
+                    //attention penser a l'implémentation d'un commentaire sur une route
+
+                    QString point = read
+                    if (compare(,,Qt::CaseInsensitive)){
+
+                        while(!in.atEnd())
                         {
 
                         }
 
-
+                    }
 
 
                  } else QMessageBox::critical(this, "Attention", trUtf8("L'image chargée n'est pas la même que celle du projet sauvegarder. Merci de charger celle qui convient."));
@@ -241,6 +246,8 @@ void carte::charger()
 
 
     }
+
+    file.close();
 }
 
 void carte::zoom(float valeur){

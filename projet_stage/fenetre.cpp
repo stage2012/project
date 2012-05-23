@@ -299,7 +299,8 @@ fenetre::fenetre():flag_dock(false)
     VdockLayout3->addLayout(VdockLayout2);
     VdockLayout3->addStretch();
 
-    QPushButton *expo = new QPushButton(trUtf8("Export en format .gpx"));
+    expo = new QPushButton(trUtf8("Export en format .gpx"));
+    expo->setEnabled(false);
     VdockLayout3->addWidget(expo);
     QPushButton *reinit = new QPushButton(trUtf8("réinitialiser"));
     VdockLayout3->addWidget(reinit);
@@ -341,7 +342,7 @@ fenetre::fenetre():flag_dock(false)
 
      QObject::connect(reinit, SIGNAL(clicked()),image, SLOT(setNbpoint()));
      QObject::connect(exp,SIGNAL(triggered()),image,SLOT(exporter_gpx()));
-     QObject::connect(expo,SIGNAL(triggered()),image,SLOT(exporter_gpx()));
+     QObject::connect(expo,SIGNAL(clicked()),image,SLOT(exporter_gpx()));
 
      QObject::connect(image, SIGNAL(ChangeRes()),this, SLOT(setCouleur()));
 }
@@ -400,6 +401,7 @@ fenetre::fenetre():flag_dock(false)
        //std::cout<<"longitude "<<c<<""<<d<<std::endl;
        if ((a!=0)||(a!=0)||(b!=0)||(c!=0)) {
             exp->setEnabled(true);
+            expo->setEnabled(true);
             image->setCoordDec(a,b,c,d);
        } else QMessageBox::critical(this, "Attention", trUtf8("Vous devez entrer des coordonnées"));
        /*SB->setVisible(true);
@@ -432,6 +434,7 @@ fenetre::fenetre():flag_dock(false)
         int l = ss2->value();
         if ((a!=0)||(b!=0)||(c!=0)||(d!=0)||(e!=0)||(f!=0)||(g!=0)||(h!=0)||(i!=0)||(j!=0)||(k!=0)||(l!=0)) {
              exp->setEnabled(true);
+             expo->setEnabled(true);
              image->setCoordSeg(a,b,c,d,e,f,g,h,i,j,k,l);
         } else QMessageBox::critical(this, "Attention", trUtf8("Vous devez entrer des coordonnées"));
 
