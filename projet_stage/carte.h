@@ -29,7 +29,6 @@ private:
     QPoint point1;
     QPoint point2_gps;
     QPoint point2;
-    QPoint res;
 
     QRgb coul;
 
@@ -39,9 +38,11 @@ private:
     coord_decimal dec1;
 
     QStack<QPoint>pile;
+    QStack<QPoint>pile_release;
 
     QString md5;
     QString source;
+    QString source_chemin;
 
     bool carteDessiner;
     bool coord_gps;
@@ -84,7 +85,7 @@ public:
     bool comparerCouleurAvecMarge(QRgb p1, QRgb p2);
     int maximum(int a, int b);
     int minimum(int a, int b);
-    int tracerZone(const QPoint &p, const QRgb &color);
+    int tracerZone(const QPoint &p);
     void parcoursImageAffichage();
     QPoint directionChemin();
 
@@ -95,21 +96,23 @@ public:
     point_gps pt_gps (QPoint a, QPoint b,QPoint c);
 
     void sauvegarde_sous();
-    void charger();
 
     bool test_carte();
-
+    void setTest_carte(bool b);
     bool test_enregistrer();
     void setTest_enregistrer(bool b);
+
+    void calcul_md5(QString src);
+    void charger();
     /*
-    double longueur(QPoint pt, QPoint pt1);
-    double angleA(QPoint a, QPoint b, QPoint c);
-    double angleB(QPoint a, QPoint b, QPoint c);
-    double angleC(QPoint a, QPoint b, QPoint c);
-    //double pointX(double x, double ac, double ab, double )
-    double aire(QPoint a, QPoint b, QPoint c);
-    double H(coord_decimal pt, coord_decimal pt1,double air);
-    */
+double longueur(QPoint pt, QPoint pt1);
+double angleA(QPoint a, QPoint b, QPoint c);
+double angleB(QPoint a, QPoint b, QPoint c);
+double angleC(QPoint a, QPoint b, QPoint c);
+//double pointX(double x, double ac, double ab, double )
+double aire(QPoint a, QPoint b, QPoint c);
+double H(coord_decimal pt, coord_decimal pt1,double air);
+*/
 
 
 

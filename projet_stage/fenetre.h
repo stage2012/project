@@ -23,6 +23,7 @@ private:
     QPushButton *gestionnaire;
     bool flag_dock;
     //action
+    QAction *charge;
     QAction *save_as;
     QAction *save;
     QAction *zoom_in;
@@ -80,8 +81,8 @@ public slots:
     void afficher_dock();
     void svg_as();
     void svg();
-
-
+    void charger();
+    void fermerProjet();
 };
 
 #endif // FENETRE_H
