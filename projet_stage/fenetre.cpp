@@ -97,6 +97,12 @@ fenetre::fenetre():flag_dock(false)
      effacer->setIcon(QIcon("fermer2.png"));
      toolbar->addSeparator();
 
+     retour = toolbar->addAction(trUtf8("Permet d'effacer le dernier tracé"));
+     toolbar->addAction(retour);
+     retour->setEnabled(false);
+     retour->setIcon(QIcon("retour.png"));
+     toolbar->addSeparator();
+
      //Zoom
      toolbar->addAction(zoom_in);
      toolbar->addSeparator();
@@ -345,9 +351,9 @@ fenetre::fenetre():flag_dock(false)
      QObject::connect(gestionnaire, SIGNAL(clicked()),this, SLOT(afficher_dock()));
 
      QObject::connect(effacer, SIGNAL(triggered()),this, SLOT(fermerProjet()));
-     QObject::connect(zoom_in, SIGNAL(triggered()),image, SLOT(augmenter_zoom()));
-     QObject::connect(zoom_out, SIGNAL(triggered()),image, SLOT(diminuer_zoom()));
-
+     QObject::connect(zoom_in, SIGNAL(triggered()),image, SLOT(zoomFenetreIn()));
+     QObject::connect(zoom_out, SIGNAL(triggered()),image, SLOT(zoomFenetreOut()));
+    QObject::connect(retour, SIGNAL(triggered()),image,SLOT(effacerDessin()));
 
      QObject::connect(reinit, SIGNAL(clicked()),image, SLOT(setNbpoint()));
      QObject::connect(exp,SIGNAL(triggered()),image,SLOT(exporter_gpx()));
@@ -377,6 +383,7 @@ fenetre::fenetre():flag_dock(false)
            zoom_in->setEnabled(true);
            zoom_out->setEnabled(true);
            affich_dock->setEnabled(true);
+           retour->setEnabled(true);
            dock->setVisible(false);
            gestionnaire->setEnabled(true);
            image->setFlags(1);
@@ -406,8 +413,15 @@ fenetre::fenetre():flag_dock(false)
        //std::cout<<"latitude "<<a<<""<<b<<std::endl;
        //std::cout<<"longitude "<<c<<""<<d<<std::endl;
        if ((a!=0)||(a!=0)||(b!=0)||(c!=0)) {
-            exp->setEnabled(true);
-            expo->setEnabled(true);
+
+           if (image->test_trace())
+           {
+               exp->setEnabled(true);
+               expo->setEnabled(true);
+           }
+
+
+            image->setPoint_valider(true);
             image->setCoordDec(a,b,c,d);
        } else QMessageBox::critical(this, "Attention", trUtf8("Vous devez entrer des coordonnées"));
        /*SB->setVisible(true);
@@ -439,8 +453,13 @@ fenetre::fenetre():flag_dock(false)
         int k = mm2->value();
         int l = ss2->value();
         if ((a!=0)||(b!=0)||(c!=0)||(d!=0)||(e!=0)||(f!=0)||(g!=0)||(h!=0)||(i!=0)||(j!=0)||(k!=0)||(l!=0)) {
-             exp->setEnabled(true);
-             expo->setEnabled(true);
+
+            if (image->test_trace())
+            {
+                exp->setEnabled(true);
+                expo->setEnabled(true);
+            }
+             image->setPoint_valider(true);
              image->setCoordSeg(a,b,c,d,e,f,g,h,i,j,k,l);
         } else QMessageBox::critical(this, "Attention", trUtf8("Vous devez entrer des coordonnées"));
 
@@ -471,6 +490,11 @@ fenetre::fenetre():flag_dock(false)
 
                             flag_dock=false;
                 }
+        qDebug()<<image->test_trace()<<image->test_point_valider();
+        if ((image->test_trace()==true)&&(image->test_point_valider()==true)) {
+            exp->setEnabled(true);
+            expo->setEnabled(true);
+        }
     }
 
 
@@ -495,6 +519,9 @@ fenetre::fenetre():flag_dock(false)
            effacer->setEnabled(true);
            zoom_in->setEnabled(true);
            zoom_out->setEnabled(true);
+           exp->setEnabled(true);
+           expo->setEnabled(true);
+           retour->setEnabled(true);
            affich_dock->setEnabled(true);
            dock->setVisible(false);
            gestionnaire->setEnabled(true);
@@ -515,11 +542,13 @@ fenetre::fenetre():flag_dock(false)
         zoom_in->setEnabled(false);
         zoom_out->setEnabled(false);
         affich_dock->setEnabled(false);
+        retour->setEnabled(false);
         dock->setVisible(false);
         gestionnaire->setEnabled(false);
         couleur= "background-color: rgb(255,255,255);";
         label->setStyleSheet(couleur);
-
+        exp->setEnabled(false);
+        expo->setEnabled(false);
         la->setValue(0);
         lo->setValue(0);
         la1->setValue(0);

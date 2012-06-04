@@ -29,6 +29,7 @@ private:
     QPoint point1;
     QPoint point2_gps;
     QPoint point2;
+    QPoint point_zoom;
 
     QRgb coul;
 
@@ -47,6 +48,8 @@ private:
     bool carteDessiner;
     bool coord_gps;
     bool enregistrer;
+    bool tracer;
+    bool point_valider;
 
     float echelle;
 
@@ -63,7 +66,6 @@ public:
     bool getCarteDessiner();
     void setCartedessiner(bool choix);
     void afficherCarte(QString chemin);
-    void zoom(float valeur);
 
     QRgb getCouleur();
     void setCouleur(QRgb c);
@@ -83,15 +85,20 @@ public:
 
 
     bool comparerCouleurAvecMarge(QRgb p1, QRgb p2);
+    bool comparerCouleurAvecMarge2(QRgb p1, QRgb p2);
     int maximum(int a, int b);
     int minimum(int a, int b);
-    int tracerZone(const QPoint &p);
+    void tracerZone(const QPoint &p);
+    int analyzeZone(const QPoint &p);
+    bool croisement(const QPoint &p);
+
     void parcoursImageAffichage();
     QPoint directionChemin();
 
 
+
     int getFlags();
-    void setFlags(int f);//permet de donner un ordre d'exécution au logiciel un déroulé des données: 0 pour le lancement, 2 pour la saisie des points gps, 1 pour la construction du chemin
+    void setFlags(int f);
 
     point_gps pt_gps (QPoint a, QPoint b,QPoint c);
 
@@ -101,34 +108,31 @@ public:
     void setTest_carte(bool b);
     bool test_enregistrer();
     void setTest_enregistrer(bool b);
+    bool test_trace();
+    void setTest_trace(bool b);
+    bool test_point_valider();
+    void setPoint_valider(bool b);
 
     void calcul_md5(QString src);
     void charger();
-    /*
-double longueur(QPoint pt, QPoint pt1);
-double angleA(QPoint a, QPoint b, QPoint c);
-double angleB(QPoint a, QPoint b, QPoint c);
-double angleC(QPoint a, QPoint b, QPoint c);
-//double pointX(double x, double ac, double ab, double )
-double aire(QPoint a, QPoint b, QPoint c);
-double H(coord_decimal pt, coord_decimal pt1,double air);
-*/
-
-
 
 signals:
     void ChangeRes();
     void changeRes2(const QPoint &p);
-    void ChangeZoom();
-    void ChangeZoomIn();
+    void ChangeZoom(const QPoint &p);
+    void ChangeZoomIn(const QPoint &p);
     void signalDessinerChemin(const QPoint &p);
     void SignalFlag(const QPoint &p);
 
 
-
 public slots:
-    void augmenter_zoom();
-    void diminuer_zoom();
+    void augmenter_zoom(const QPoint &p);
+    void diminuer_zoom(const QPoint &p);
+    void zoomFenetreIn();
+    void zoomFenetreOut();
+
+    void effacerDessin();
+
     void fermerProjet();
     void setNbpoint ();
     void dessinerChemin(const QPoint &p);

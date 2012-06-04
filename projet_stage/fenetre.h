@@ -31,6 +31,7 @@ private:
     QAction *exp;
     QAction *affich_dock;
     QAction *effacer;
+    QAction *retour;
 
     // latitude/longitude
     QDoubleSpinBox  *la;

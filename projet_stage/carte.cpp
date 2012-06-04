@@ -5,7 +5,8 @@
 
 //constructeur
 
-carte::carte():point_click(0,0),point_depart(0,0),point_release(0,0),point1_gps(0,0),point1(0,0),point2_gps(0,0),point2(0,0),coul(255255255),md5(""),source(""),source_chemin(""),carteDessiner(false),coord_gps(false),enregistrer(false),nbpoint(0),flags(0),etendueZone(10)
+carte::carte():point_click(0,0),point_depart(0,0),point_release(0,0),point1_gps(0,0),point1(0,0),point2_gps(0,0),point2(0,0),coul(255255255),md5(""),source(""),source_chemin(""),carteDessiner(false),coord_gps(false),enregistrer(false),tracer(false), point_valider(false), nbpoint(0),flags(0),etendueZone(5)
+
 {
 
     //largeur= QApplication::desktop()->width()-100;
@@ -16,8 +17,8 @@ carte::carte():point_click(0,0),point_depart(0,0),point_release(0,0),point1_gps(
     tracerChemin= new QImage();
     copieTailleNormale= new QImage();
 
-    QObject::connect(this, SIGNAL(ChangeZoomIn()),this, SLOT(augmenter_zoom()));
-    QObject::connect(this, SIGNAL(ChangeZoom()),this, SLOT(diminuer_zoom()));
+    QObject::connect(this, SIGNAL(ChangeZoomIn(QPoint)),this, SLOT(augmenter_zoom(QPoint)));
+    QObject::connect(this, SIGNAL(ChangeZoom(QPoint)),this, SLOT(diminuer_zoom(QPoint)));
     QObject::connect(this, SIGNAL(signalDessinerChemin(QPoint)),this, SLOT(dessinerChemin(QPoint)));
     QObject::connect(this, SIGNAL(changeRes2(QPoint)),this, SLOT(attributCouleur(QPoint)));
     QObject::connect(this, SIGNAL(changeRes2(QPoint)),this, SLOT(sauvegardeItineraire(QPoint)));
@@ -48,6 +49,10 @@ coord_decimal carte::getCoordDec1() {return dec1;}
 bool carte::test_carte() {return carteDessiner;}
 
 bool carte::test_enregistrer() { return enregistrer;}
+
+bool carte::test_trace() { return tracer;}
+
+bool carte::test_point_valider() { return point_valider;}
 
 
 //mutateur
@@ -85,15 +90,13 @@ void carte::setCoordSeg(int d1, int m1,double s1,int dd1, int mm1,double ss1,int
 
 }
 
-void carte::setTest_enregistrer(bool b)
-{
-   enregistrer=b;
-}
+void carte::setTest_enregistrer(bool b) {  enregistrer=b;}
 
-void carte::setTest_carte(bool b)
-{
-    carteDessiner=b;
-}
+void carte::setTest_carte(bool b){ carteDessiner=b;}
+
+void carte::setTest_trace(bool b){tracer=b;}
+
+void carte::setPoint_valider(bool b){point_valider=b;}
 
 //fonctions
 void carte::calcul_md5(QString src)
@@ -112,25 +115,26 @@ void carte::afficherCarte(QString chemin){
     if (!chemin.isNull()) {
     echelle= 1.0;
     imageCarte= new QImage(chemin);
-    std::cout<<"image: "<<chemin.toStdString()<<std::endl;
+    //std::cout<<"image: "<<chemin.toStdString()<<std::endl;
     int width= imageCarte->width();
     int height=imageCarte->height();
 
+    //redimenssion de l'image
     if (width>height){
     QImage newImage= (imageCarte->scaledToWidth(1201,Qt::SmoothTransformation));
     imageCarte=new QImage(newImage);
     imageAffichage= new QImage(newImage);
     copieTailleNormale= new QImage(newImage);
-    //std::cout<<"you piss off"<<std::endl;
+    //std::cout<<"boucle width height"<<std::endl;
     }
     else {
     QImage newImage= (imageCarte->scaledToHeight(651,Qt::SmoothTransformation));
     imageCarte=new QImage(newImage);
     imageAffichage= new QImage(newImage);
     copieTailleNormale= new QImage(newImage);
-     //std::cout<<"you piss off"<<std::endl;
+     //std::cout<<"boucle height width"<<std::endl;
     }
-     //std::cout<<"ça passe"<<std::endl;
+    //std::cout<<"ça passe"<<std::endl;
     largeur=imageCarte->width();
     hauteur=imageCarte->height();
     carteDessiner=true;
@@ -139,13 +143,10 @@ void carte::afficherCarte(QString chemin){
     while(!pile.isEmpty()){
         pile.pop();
     }
-
     while(!pile_release.isEmpty()){
         pile_release.pop();
     }
-
     calcul_md5(chemin);
-
     p1=new QImage("gps2.png");
     p2=new QImage("gps2.png");
 
@@ -159,28 +160,37 @@ void carte::afficherCarte(QString chemin){
 
 void carte::exporter_gpx()
 {
-    QString str =  QFileDialog::getSaveFileName(this, tr("Exporter le projet en .gpx"),"/home/Export_gpx"+QDate::currentDate().toString()+".gpx",tr("Fichier (*.gpx)"));
-    QString entete = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<gpx version=\"1.1\"creator=\"Projet Stage RAKOTONIARY SOMBI @ BEILLEAU QUENTIN\">\n<trk>\n<name>Tracking GPS</name>\n<trkseg>\n";
-    QString fin = "</trkseg>\n</trk>\n</gpx>";
-    QString points = "";
-    int i=0;
-    QStack<QPoint> tmp = pile;
+    if (tracer==true) {
+        QString str =  QFileDialog::getSaveFileName(this, tr("Exporter le projet en .gpx"),"/home/Export_gpx"+QDateTime::currentDateTime().toString()+".gpx",tr("Fichier (*.gpx)"));
+        QString entete = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<gpx version=\"1.1\"creator=\"Projet Stage RAKOTONIARY SOMBI @ BEILLEAU QUENTIN\">\n<trk>\n<name>Hicker Path</name>\n<trkseg>\n";
+        QString fin = "</trkseg>\n</trk>\n</gpx>";
+        QString points = "";
+        int i=0;
+        QStack<QPoint> tmp;
 
-    while(!tmp.isEmpty())
-    {
-    QPoint var = tmp.pop();
-    point_gps p = pt_gps(point1,point2,var);
-    points =points+" <trkpt lat="+QString::number(p.X())+" lon="+QString::number(p.Y())+"><cmt>Point "+QString::number(i)+"</cmt></trkpt>\n";
-    i++;
-    }
+        while(!pile.isEmpty())
+        {
+            tmp.push(pile.pop());
 
-    //str = str+"/Export_gpx"+QDate::currentDate().toString()+".gpx";//voir comment mieux utiliser le chemin voir a créer un dossier
+        }
 
-    QFile file(str);
-    if (file.open(QFile::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-         QTextStream out(&file);
-         out << entete<< points << fin;
-    } else QMessageBox::critical(this, "Attention : ", trUtf8("Impossible d'enregistrer le fichier à cet emplacement. Merci de choisir un emplacement valide."));
+
+        while(!tmp.isEmpty())
+        {
+            QPoint var = tmp.pop();
+            point_gps p = pt_gps(point1,point2,var);
+            points =points+" <trkpt lat="+QString::number(p.Y())+" lon="+QString::number(p.X())+"><cmt>Point "+QString::number(i)+"</cmt></trkpt>\n";// attention à reprendre pas sur du resultat
+            i++;
+        }
+
+        //str = str+"/Export_gpx"+QDate::currentDate().toString()+".gpx";//voir comment mieux utiliser le chemin voir a créer un dossier
+
+        QFile file(str);
+        if (file.open(QFile::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+             QTextStream out(&file);
+             out << entete<< points << fin;
+        } else QMessageBox::critical(this, "Attention : ", trUtf8("Impossible d'enregistrer le fichier à cet emplacement. Merci de choisir un emplacement valide."));
+    } else QMessageBox::critical(this, "Attention : ", trUtf8("Un chemin doit-être d'abord tracé."));
 }
 
 
@@ -249,339 +259,19 @@ void carte::sauvegarde_sous()
 
 }
 
-void carte::zoom(float valeur){
-    echelle = (valeur * echelle);
-    valeurZoom->setText(QString::number(echelle) );
 
 
-}
-
-void carte::dessinerChemin(const QPoint &p){
-
-    qDebug()<<"dessiner chemin";
-    //parcours entier de la carte
-    //parcoursImageAffichage();
-
-    // capture point de release souris
-    point_release=p;
-    pile_release.push(p);
-
-     // tracer départ du chemin
-    tracerZone(point_click);
-    //int i=tracerZone(point_click,coul);
-    //std::cout<<"zone : "<<i<<std::endl;
-
-    // calcul orientation (release devient l'orientation)
-
-    if (abs(point_release.x()-point_click.x())>abs(point_release.y()-point_click.y())){
-               if ((point_release.x()-point_click.x())>0){
-                   point_release=QPoint (point_click.x()+etendueZone,point_click.y());
-                   point_click=point_release;
-                   point_release=QPoint (point_click.x()+etendueZone,point_click.y());
-                   tracerZone(point_click);
-                }
-
-
-                   else{
-                   point_release=QPoint (point_click.x()-etendueZone,point_click.y());
-                   point_click=point_release;
-                   point_release=QPoint (point_click.x()-etendueZone,point_click.y());
-                   tracerZone(point_click);
-                }
-       }
-       else {
-           if ((point_release.y()-point_click.y())>0){
-               point_release=QPoint (point_click.x(),point_click.y()+etendueZone);
-               point_click=point_release;
-               point_release=QPoint (point_click.x(),point_click.y()+etendueZone);
-               tracerZone(point_click);
-            }
-               else{
-               point_release=QPoint (point_click.x(),point_click.y()-etendueZone);
-               point_click=point_release;
-               point_release=QPoint (point_click.x(),point_click.y()-etendueZone);
-               tracerZone(point_click);
-            }
-       }
-
-   // std::cout<<"point de base: "<<point_click.x()<<" "<<point_click.y()<<std::endl;
-   // std::cout<<"point release "<<point_release.x()<<" "<<point_release.y()<<std::endl;
-   QPoint resultat=directionChemin();
-
-   // trace suite chemin jusqu'à sortie de chemin
-   while(resultat!=QPoint(0,0)&&
-         (resultat.x()<=largeur)&&
-         (resultat.x()>=0)&&
-         (resultat.y()>=0)&&
-         (resultat.y()<=hauteur))
-   {
-      //std::cout<<"resultat: "<<resultat.x()<<" "<<resultat.y()<<std::endl;
-
-      point_release.setX(resultat.x()+(resultat.x()-point_click.x()));
-      point_release.setY(resultat.y()+(resultat.y()-point_click.y()));
-
-      point_click.setX(resultat.x());
-      point_click.setY(resultat.y());
-      resultat=directionChemin();
-  //      std::cout<<"new point  de base: "<<point_click.x()<<" "<<point_click.y()<<std::endl;
-  //      std::cout<<"new release x: "<<point_release.x()<<" new release y: "<<point_release.y()<<std::endl;
-    }
-update();
-}
-
-
-
-QPoint carte::directionChemin(){
-    int margeErreur=3;
-    int choix=0;
-    //0: arret   1: gauche   2:haut    3:droite   4: bas
-    //21:HG     23:HD     41:BG      43:BD
-    QPoint ancienneOrientation (point_release.x()-point_click.x(),point_release.y()-point_click.y());
-    if (ancienneOrientation==QPoint(-etendueZone,0)) choix=1;
-    else if (ancienneOrientation==QPoint(0,-etendueZone)) choix=2;
-    else if (ancienneOrientation==QPoint(etendueZone,0)) choix=3;
-    else if (ancienneOrientation==QPoint(0,etendueZone)) choix=4;
-
-    else if (ancienneOrientation==QPoint(-etendueZone,-etendueZone)) {choix=21;
-    std::cout<<"yes1"<<std::endl;}
-    else if (ancienneOrientation==QPoint(etendueZone,-etendueZone)) {choix=23;
-    std::cout<<"yes2"<<std::endl;}
-    else if (ancienneOrientation==QPoint(-etendueZone,etendueZone)) {choix=41;
-    std::cout<<"yes3"<<std::endl;}
-    else if (ancienneOrientation==QPoint(etendueZone,etendueZone)){ choix=43;
-    std::cout<<"yes4"<<std::endl;}
-
-    switch (choix){
-    //gauche
-            case (1):
-    {
-                 int gauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y())));
-                 if (gauche>margeErreur)return QPoint(point_click.x()-etendueZone,point_click.y());
-                 else
-                 {
-                    int haut=(tracerZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
-                    int bas=(tracerZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
-                    int hautGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
-                    int basGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
-
-                    int nouvelleOrientation= maximum(basGauche,maximum(hautGauche,(maximum(haut,bas))));
-                    if (nouvelleOrientation>margeErreur){
-                        if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
-                        else if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()+etendueZone);
-                        else if(nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
-                        else if (nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
-                    }
-                 }
-                return QPoint(0,0);
-    }
-                break;
-
-    //haut
-            case (2):
-    {
-                int haut=(tracerZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
-                if(haut>margeErreur)return QPoint(point_click.x(),point_click.y()-etendueZone);
-                else
-                {
-                    int gauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y())));
-                    int droite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y())));
-                    int hautGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
-                    int hautDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
-
-                    int nouvelleOrientation= maximum(hautGauche,maximum(hautDroite,(maximum(droite,gauche))));
-                    if (nouvelleOrientation>margeErreur){
-                        if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
-                        else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
-                        else if(nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
-                        else if (nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
-                    }
-                }
-                return QPoint(0,0);
-      }
-                break;
-
-    //droite
-            case (3):
-
-        {
-                     int droite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y())));
-                     if (droite>margeErreur)return QPoint(point_click.x()+etendueZone,point_click.y());
-                     else
-                     {
-                        int haut=(tracerZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
-                        int bas=(tracerZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
-                        int hautDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
-                        int basDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
-
-                        int nouvelleOrientation= maximum(basDroite,maximum(hautDroite,(maximum(haut,bas))));
-                        if (nouvelleOrientation>margeErreur){
-                            if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
-                            else if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()+etendueZone);
-                            else if(nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
-                            else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
-                        }
-                     }
-                    return QPoint(0,0);
-        }
-                break;
-
-    //bas
-            case (4):
-        {
-                    int bas=(tracerZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
-                    if(bas>margeErreur)return QPoint(point_click.x(),point_click.y()+etendueZone);
-                    else
-                    {
-                        int gauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y())));
-                        int droite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y())));
-                        int basGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
-                        int basDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
-
-                        int nouvelleOrientation= maximum(basGauche,maximum(basDroite,(maximum(droite,gauche))));
-                        if (nouvelleOrientation>margeErreur){
-                            if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
-                            else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
-                            else if(nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
-                            else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
-                        }
-                    }
-                    return QPoint(0,0);
-          }
-                    break;
-
-
-
-        //HG
-                case (21):
-        {
-                    int hautGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
-                    if(hautGauche>margeErreur)return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
-                    else
-                    {
-                        int haut=(tracerZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
-                        int gauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y())));
-                        int basGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
-                        int hautDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
-
-                        int nouvelleOrientation=maximum(gauche,maximum(haut,maximum(basGauche,hautDroite)));
-                        if (nouvelleOrientation>margeErreur){
-                            if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
-                            else if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
-                            else if (nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
-                            else if (nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
-                        }
-                    }
-                    return QPoint(0,0);
-          }
-                    break;
-
-        //HD
-                case (23):
-        {
-                    int hautDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
-                    if(hautDroite>margeErreur)return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
-                    else
-                    {
-                        int haut=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y())));
-                        int droite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y())));
-                        int basDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
-                        int hautGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
-
-                        int nouvelleOrientation=maximum(droite,maximum(haut,maximum(basDroite,hautGauche)));
-                        if (nouvelleOrientation>margeErreur){
-                            if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
-                            else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
-                            else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
-                            else if (nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
-                        }
-                    }
-                    return QPoint(0,0);
-          }
-                    break;
-
-        //BG
-                case (41):
-
-         {
-                    int basGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
-                    if(basGauche>margeErreur)return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
-                    else
-                    {
-                        int bas=(tracerZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
-                        int gauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y())));
-                        int basDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
-                        int hautGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
-
-                        int nouvelleOrientation=maximum(gauche,maximum(bas,maximum(basDroite,hautGauche)));
-                        if (nouvelleOrientation>margeErreur){
-                            if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()+etendueZone);
-                            else if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
-                            else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
-                            else if (nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
-                        }
-                    }
-                    return QPoint(0,0);
-          }
-                    break;
-
-        //BD
-                case (43):
-            {
-                        int basDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
-                        if(basDroite>margeErreur)return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
-                        else
-                        {
-                            int bas=(tracerZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
-                            int droite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y())));
-                            int basGauche=(tracerZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
-                            int hautDroite=(tracerZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
-
-                            int nouvelleOrientation=maximum(droite,maximum(bas,maximum(basGauche,hautDroite)));
-                            if (nouvelleOrientation>margeErreur){
-                                if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()-etendueZone);
-                                else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
-                                else if (nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
-                                else if (nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
-                            }
-                        }
-                        return QPoint(0,0);
-              }
-                        break;
-
-
-
-
-
-
-
-
-     return QPoint(0,0);
-  }
-}
-
-void carte::parcoursImageAffichage(){
-
-    //parcourir toute la carte
-    for (int i=0;i<largeur;i++){
-         for (int j=0; j<hauteur;j++){
-             if (comparerCouleurAvecMarge(coul, imageCarte->pixel(i,j))==true)
-                {imageCarte->setPixel(QPoint(i,j),0xFF00FF00);}
-            // else {imageAffichage->setPixel(QPoint(i,j),0xFFFFFF);}
-           // std::cout<<"couleur : "<<coul<<std::endl;}
-             //imageCarte->setPixel(QPoint(i,j));
-         }
-     }
-
-}
 
 void carte::sauvegardeItineraire(const QPoint &p){
+    //QPoint q=p;
+   /* q.setX(q.x()/echelle);
+    q.setY(q.y()/echelle);
+    pile.push(q);*/
     pile.push(p);
-
 }
 
 void carte::charger()
 {
-
     QString fichier = QFileDialog::getOpenFileName(this, "Charger un projet", "/home", "Fichier (*.xml)");
     QFile file(fichier);
     QStack<QPoint> tmp;
@@ -607,6 +297,8 @@ void carte::charger()
          QString md5s = liste.at(2);
          std::cout<<"md5 :"<<md5.toStdString()<<" md5s :"<<md5s.toStdString()<<std::endl;
          if (md5==md5s) {
+               point_valider=true;
+               tracer=true;
                for(int j=0;j<liste.size();j++) {
                    ligne = liste.at(j);
                    if(ligne=="<image>") afficherCarte(src);
@@ -704,66 +396,154 @@ point_gps carte::pt_gps(QPoint a, QPoint b, QPoint c)
     //std::cout<<" var "<<var<<" var2 "<<var2<<std::endl;
     double res_x = dec.getLongitude()+var;
     double res_y = dec.getLatitude()+var2;
-
     res.setX(res_x);
     res.setY(res_y);
-
     return res;
 }
 
 
 //slots
-void carte::augmenter_zoom(){
+void carte::zoomFenetreIn(){
+    if (echelle<2.4){
+echelle*=1.25;
+QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+imageAffichage=new QImage(newImage);
+tracerChemin=new QImage(newImage3);
+largeur=imageCarte->width();
+hauteur=imageCarte->height();
+update();
+    }
+}
+void carte::zoomFenetreOut(){
+  if (echelle>1){
+  echelle*=0.8;
+  QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+  QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+  imageAffichage=new QImage(newImage);
+  tracerChemin=new QImage(newImage3);
+  largeur=imageCarte->width();
+  hauteur=imageCarte->height();
+  update();
+  }
+}
+
+void carte::augmenter_zoom(const QPoint &p){
+   if (echelle<2){
     std::cout<<"zoom in"<<std::endl;
+    //point_zoom=p;
     //zoom(1.25);
     echelle*=1.25;
-    QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle));
-    //QImage newImage2= (imageAffichage->scaled(largeur*echelle,hauteur*echelle));
-    QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle));
 
+    //HG
+    if ((p.x()<largeur/2) && (p.y()<hauteur/2)){
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
+    //BG
+    else if ((p.x()<largeur/2) && (p.y()>=hauteur/2)){
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,hauteur*echelle-hauteur,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,hauteur*echelle-hauteur,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
+    //HD
+    else if ((p.x()>=largeur/2) && (p.y()<hauteur/2)){
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,0,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,0,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
+    //BD
+    else {
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,hauteur*echelle-hauteur,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,hauteur*echelle-hauteur,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
 
-    imageAffichage=new QImage(newImage);
-    //imageAffichage=new QImage(newImage2);
-    tracerChemin=new QImage(newImage3);
-    largeur=imageCarte->width();
-    hauteur=imageCarte->height();
     update();
+   }
 }
 
-void carte::diminuer_zoom(){
+void carte::diminuer_zoom(const QPoint &p){
+    if (echelle>1){
     std::cout<<"zoom out"<<std::endl;
+    //point_zoom=p;
     //zoom(0.8);
     echelle*=0.8;
-    QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle));
-    //QImage newImage2= (imageAffichage->scaled(largeur*echelle,hauteur*echelle));
-    QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle));
+    //HG
+    if ((p.x()<largeur/2) && (p.y()<hauteur/2)){
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,0,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
+    //BG
+    else if ((p.x()<largeur/2) && (p.y()>=hauteur/2)){
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,hauteur*echelle-hauteur,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(0,hauteur*echelle-hauteur,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
+    //HD
+    else if ((p.x()>=largeur/2) && (p.y()<hauteur/2)){
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,0,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,0,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
+    //BD
+    else {
+        QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,hauteur*echelle-hauteur,largeur,hauteur);
+        QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle,Qt::KeepAspectRatioByExpanding)).copy(largeur*echelle-largeur,hauteur*echelle-hauteur,largeur,hauteur);
+        imageAffichage=new QImage(newImage);
+        tracerChemin=new QImage(newImage3);
+        largeur=imageCarte->width();
+        hauteur=imageCarte->height();
+    }
 
-    imageAffichage=new QImage(newImage);
-    //imageAffichage=new QImage(newImage2);
+            //QImage newImage= (copieTailleNormale->scaled(largeur*echelle,hauteur*echelle));
+    //QImage newImage3= (tracerChemin2->scaled(largeur*echelle,hauteur*echelle));
+    /*if(point1!=QPoint(0,0))
+    setPoint1(QPoint(point1.x()/1.25,point1.y()/1.25));
+    if(point2!=QPoint(0,0))
+    setPoint2(QPoint(point2.x()/1.25,point2.y()/1.25)
+              );*/
+    /*imageAffichage=new QImage(newImage);
     tracerChemin=new QImage(newImage3);
     largeur=imageCarte->width();
-    hauteur=imageCarte->height();
+    hauteur=imageCarte->height();*/
     update();
+    }
 }
 
-void carte::attributCouleur(const QPoint &p){
+void carte::attributCouleur(const  QPoint &p){
 
     QRgb pt;
-    QPoint q;
-    q.setX(p.x()/echelle);
-    q.setY(p.y()/echelle);
+    QPoint q=p;
+    q.setX(q.x()/echelle);
+    q.setY(q.y()/echelle);
     setPoint(q);
     pt = imageCarte->pixel(q);
     point_depart=q;
     setCouleur(pt);
-
-    /*QRgb pt ;
-    setPoint(p);
-    pt = imageCarte->pixel(p);
-    point_depart=p;
-    coul=pt;*/
-
-
 }
 
 void carte::fermerProjet(){
@@ -775,9 +555,18 @@ void carte::fermerProjet(){
   tracerChemin= new QImage(newImage);
   imageAffichage=new QImage(newImage);
   copieTailleNormale=new QImage(newImage);
-
+  tracer=false;
+  carteDessiner=false;
+  enregistrer=false;
+  point_valider=false;
   p1= new QImage();
   p2= new QImage();
+  QPoint pt(0,0);
+  point1_gps=pt;
+  point2_gps=pt;
+  point1=pt;
+  point2=pt;
+  nbpoint=0;
   setFlags(0);
   dec.setLatitude(0);
   dec.setLongitude(0);
@@ -792,10 +581,14 @@ void carte::fermerProjet(){
 
 void carte::placerFlag1(const QPoint &p)
 {
+    QPoint q=p;
+    q.setX(q.x()/echelle);
+    q.setY(q.y()/echelle);
+
     if (nbpoint==0){
-        point1=p;
-        int x = (p.x()-4);
-        int y = (p.y()-(p1->height()));
+        point1=q;
+        int x = (q.x()-4);
+        int y = (q.y()-(p1->height()));
         QPoint pt(x,y);
         std::cout<<"image 1 : "<<x<<" "<<y<<std::endl;
         nbpoint++;
@@ -808,10 +601,13 @@ void carte::placerFlag1(const QPoint &p)
 
 void carte::placerFlag2(const QPoint &p)
 {
+    QPoint q=p;
+    q.setX(q.x()/echelle);
+    q.setY(q.y()/echelle);
     if (nbpoint==1){
         point2=p;
-        int x = (p.x()-4);
-        int y = (p.y()-(p2->height()));
+        int x = (q.x()-4);
+        int y = (q.y()-(p2->height()));
         std::cout<<"image 2 : "<<x<<" "<<y<<std::endl;
         QPoint pt(x,y);
         nbpoint++;
@@ -827,6 +623,19 @@ void carte::setNbpoint()
 {
     nbpoint=0;
     update();
+}
+
+void::carte::effacerDessin(){
+
+    tracerChemin=new QImage(largeur,hauteur,QImage::Format_ARGB32);
+    tracerChemin2=new QImage(largeur,hauteur,QImage::Format_ARGB32);
+    imageAffichage= copieTailleNormale;
+
+    while(!pile.isEmpty()){
+        pile.pop();
+    }
+    update();
+
 }
 
 
@@ -871,6 +680,7 @@ void carte::mousePressEvent(QMouseEvent *event)
     if ((carteDessiner)&&(flags==1)){
            if (event->button() == Qt::LeftButton)
             {
+                 qDebug()<<event->pos();
                emit changeRes2(event->pos());
              }
     } else if ((carteDessiner)&&(flags==2)){
@@ -909,11 +719,11 @@ void carte::wheelEvent(QWheelEvent *event)
 {
     if ((carteDessiner)&&(flags>0)){
         if (event->delta()>0){
-            emit ChangeZoomIn();
+            emit ChangeZoomIn(event->pos());
             update();
         }
         else   {
-            emit ChangeZoom();
+            emit ChangeZoom(event->pos());
             update();
         }
     }
@@ -921,7 +731,7 @@ void carte::wheelEvent(QWheelEvent *event)
 
 
 
-/******************* fonction pour l'algo de couleur*********************/
+/******************* fonction pour tracé chemin*********************/
 
 
 int carte::maximum(int a, int b){
@@ -934,120 +744,538 @@ int carte::minimum(int a, int b){
         else return b;
 }
 
-
-
-
-
+//fonction de comparaison de couleur pour l'analyse du chemin à suivre
 bool carte::comparerCouleurAvecMarge(QRgb p1, QRgb p2){
 
     unsigned int differenceRouge = abs(qRed(p1) - qRed(p2));
     unsigned int differenceVert  = abs(qGreen(p1)- qGreen(p2));
     unsigned int differenceBleu  = abs(qBlue(p1)-qBlue(p2));
-    /*int couleurMaxP1= maximum(qRed(p1),maximum(qGreen(p1), qBlue(p1)));
-    int couleurMaxP2= maximum(qRed(p2),maximum(qGreen(p2), qBlue(p2)));
-    int couleurMin= minimum(qRed(p1),minimum(qGreen(p1), qBlue(p1)));*/
-    if ((differenceRouge + differenceVert + differenceBleu)>100) return false;
+    if ((differenceRouge + differenceVert + differenceBleu)>50) return false;
         else return true;
+}
+//fonction de comparaison de couleur pour le tracé du chemin
+bool carte::comparerCouleurAvecMarge2(QRgb p1, QRgb p2){
 
-    /*int couleurDominante= maximum(differenceBleu,maximum(differenceRouge, differenceVert));
-    if(couleurDominante>40) return false;   //40
-                 else if ((differenceRouge + differenceVert + differenceBleu)>100) return false;  //100
-    else return true;*/
-              //if (somme<10) return true;
+    unsigned int differenceRouge = abs(qRed(p1) - qRed(p2));
+    unsigned int differenceVert  = abs(qGreen(p1)- qGreen(p2));
+    unsigned int differenceBleu  = abs(qBlue(p1)-qBlue(p2));
+    if ((differenceRouge + differenceVert + differenceBleu)>120) return false;
+        else return true;
 }
 
-
-int carte::tracerZone(const QPoint &p){
+//trace un zone
+void carte::tracerZone(const QPoint &p){
+   //QPoint q=p;
+    //q.setX(q.x()/echelle);
+    //q.setY(q.y()/echelle);
     int nbPixel=0;
+    //gauche
+        for (int i=(p.x()-etendueZone); i<(p.x()+etendueZone);i++){
+            for (int j=(p.y()-etendueZone); j<(p.y()+etendueZone);j++){
+                if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
+                if ( comparerCouleurAvecMarge2(coul,imageAffichage->pixel(QPoint(i,j)))) {
+                    imageAffichage->setPixel(QPoint(i,j),255255255);
+                    tracerChemin2->setPixel(QPoint(i,j),0xFF00FF00);
+                    tracerChemin->setPixel(QPoint(i,j),0xFF00FF00);
+                    nbPixel++;
+                    }
+                }
+            }
+        }
+    }
+
+//analyse la couleur d'une zone
+int carte::analyzeZone(const QPoint &p){
+
+    int nbPixel=0;
+    for (int i=(p.x()-etendueZone); i<(p.x()+etendueZone);i++){
+        for (int j=(p.y()-etendueZone); j<(p.y()+etendueZone);j++){
+            if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
+            if ( comparerCouleurAvecMarge(coul,imageAffichage->pixel(QPoint(i,j)))) {
+            nbPixel++;
+            }
+        }
+        }
+    }
+    return nbPixel;
+ }
+
+//verifie si on est à un croisement
+bool carte::croisement(const QPoint &p){
+
+    int nbDirections=0;
+
     QPoint Orientation (point_release.x()-point_click.x(),point_release.y()-point_click.y());
+
 
     //gauche
     if (Orientation==QPoint(-etendueZone,0)){
-        for (int i=p.x()-etendueZone; i<p.x()+etendueZone;i++){
-            for (int j=(p.y()-etendueZone/2); j<(p.y()+etendueZone/2);j++){
-                if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
-                if ( comparerCouleurAvecMarge(coul,imageAffichage->pixel(QPoint(i,j)))) {
-                    imageAffichage->setPixel(QPoint(i,j),255255255);
-                    tracerChemin->setPixel(QPoint(i,j),0xFF00FF00);
-                    tracerChemin2->setPixel(QPoint(i/echelle,j/echelle),0xFF00FF00);
-                    nbPixel++;
-                    }
-                }
-            }
-        }
-       return nbPixel;
-    }
+        //std::cout<<"je suis vers la gauche"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+     }
+
     //haut
     else if (Orientation==QPoint(0,-etendueZone)){
-        for (int i=(p.x()-etendueZone/2); i<(p.x()+etendueZone/2);i++){
-            for (int j=p.y()-etendueZone; j<p.y()+etendueZone;j++){
-                if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
-                if ( comparerCouleurAvecMarge(coul,imageAffichage->pixel(QPoint(i,j)))) {
-                    imageAffichage->setPixel(QPoint(i,j),255255255);
-                    tracerChemin->setPixel(QPoint(i,j),0xFF00FF00);
-                    tracerChemin2->setPixel(QPoint(i/echelle,j/echelle),0xFF00FF00);
-                    nbPixel++;
-                    }
-                }
-            }
-        }
-       return nbPixel;
+       // std::cout<<"je suis vers le haut"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;
     }
-    //droite
+    //doite
     else if (Orientation==QPoint(etendueZone,0)){
-        for (int i=p.x()-etendueZone; i<p.x()+etendueZone;i++){
-            for (int j=(p.y()-etendueZone/2); j<(p.y()+etendueZone/2);j++){
-                if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
-                if ( comparerCouleurAvecMarge(coul,imageAffichage->pixel(QPoint(i,j)))) {
-                    imageAffichage->setPixel(QPoint(i,j),255255255);
-                    tracerChemin->setPixel(QPoint(i,j),0xFF00FF00);
-                    tracerChemin2->setPixel(QPoint(i/echelle,j/echelle),0xFF00FF00);
-                    nbPixel++;
-                    }
-                }
-            }
-        }
-       return nbPixel;
+       // std::cout<<"je suis vers la droite"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;
     }
     //bas
     else if (Orientation==QPoint(0,etendueZone)){
-        for (int i=(p.x()-etendueZone/2); i<(p.x()+etendueZone/2);i++){
-            for (int j=p.y()-etendueZone; j<p.y()+etendueZone;j++){
-                if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
-                if ( comparerCouleurAvecMarge(coul,imageAffichage->pixel(QPoint(i,j)))) {
-                    imageAffichage->setPixel(QPoint(i,j),255255255);
-                    tracerChemin->setPixel(QPoint(i,j),0xFF00FF00);
-                    tracerChemin2->setPixel(QPoint(i/echelle,j/echelle),0xFF00FF00);
-                    nbPixel++;
-                    }
-                }
-            }
+        //std::cout<<"je suis vers le bas"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+    }
+    //HG
+    else if (Orientation==QPoint(-etendueZone,-etendueZone)){
+        std::cout<<"je suis vers HG"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+    }
+    //HD
+    else if (Orientation==QPoint(etendueZone,-etendueZone)){
+        std::cout<<"je suis vers HD"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+    }
+    //BG
+    else if (Orientation==QPoint(-etendueZone,etendueZone)){
+        std::cout<<"je suis vers BG"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()-etendueZone))>3)) nbDirections++;
+    }
+    //BD
+    else if (Orientation==QPoint(etendueZone,etendueZone)){
+        std::cout<<"je suis vers BD"<<std::endl;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()-2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()-etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x(),p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x(),p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()-2*etendueZone,p.y()+2*etendueZone))>3)&&(analyzeZone(QPoint(p.x()-etendueZone,p.y()+etendueZone))>3)) nbDirections++;
+            if ((analyzeZone(QPoint(p.x()+2*etendueZone,p.y()-2*etendueZone)))>3&&(analyzeZone(QPoint(p.x()+etendueZone,p.y()-etendueZone))>3)) nbDirections++;    }
+
+    if (nbDirections<=2){
+        //std::cout<<"continues:"<<std::endl;
+        return false;
         }
-       return nbPixel;
+    else {
+        //std::cout<<" nb directions:"<<nbDirections<<std::endl;
+        return true;
+        }
     }
 
-    else
-        for (int i=p.x()-etendueZone; i<p.x()+etendueZone;i++){
-            for (int j=p.y()-etendueZone; j<p.y()+etendueZone;j++){
-                if((i<=largeur)&&(i>=0)&&(j>=0)&&(j<=hauteur)){
-                if ( comparerCouleurAvecMarge(coul,imageAffichage->pixel(QPoint(i,j)))) {
-                    imageAffichage->setPixel(QPoint(i,j),255255255);
-                    tracerChemin->setPixel(QPoint(i,j),0xFF00FF00);
-                    tracerChemin2->setPixel(QPoint(i/echelle,j/echelle),0xFF00FF00);
-                    nbPixel++;
-                    }
+void carte::dessinerChemin(const QPoint &p){
+    //QPoint q=p;
+    qDebug()<<"dessiner chemin";
+    //q.setX(p.x()/echelle);
+    //q.setY(p.y()/echelle);
+    //point_release=q;
+    //pile_release.push(q);
+
+    // capture point de release souris
+    point_release=p;
+    pile_release.push(p);
+    tracer=true;
+
+    // tracer départ du chemin
+    tracerZone(point_click);
+
+    // calcul orientation (release devient l'orientation)
+    if (abs(point_release.x()-point_click.x())>abs(point_release.y()-point_click.y())){
+               if ((point_release.x()-point_click.x())>0){
+                   point_release=QPoint (point_click.x()+etendueZone,point_click.y());
+                   point_click=point_release;
+                   point_release=QPoint (point_click.x()+etendueZone,point_click.y());
+                   tracerZone(point_click);
                 }
+
+
+                   else{
+                   point_release=QPoint (point_click.x()-etendueZone,point_click.y());
+                   point_click=point_release;
+                   point_release=QPoint (point_click.x()-etendueZone,point_click.y());
+                   tracerZone(point_click);
+                }
+       }
+       else {
+           if ((point_release.y()-point_click.y())>0){
+               point_release=QPoint (point_click.x(),point_click.y()+etendueZone);
+               point_click=point_release;
+               point_release=QPoint (point_click.x(),point_click.y()+etendueZone);
+               tracerZone(point_click);
             }
-        }
-       return nbPixel;
+               else{
+               point_release=QPoint (point_click.x(),point_click.y()-etendueZone);
+               point_click=point_release;
+               point_release=QPoint (point_click.x(),point_click.y()-etendueZone);
+               tracerZone(point_click);
+            }
+       }
+
+   // std::cout<<"point de base: "<<point_click.x()<<" "<<point_click.y()<<std::endl;
+   // std::cout<<"point release "<<point_release.x()<<" "<<point_release.y()<<std::endl;
+   QPoint resultat=directionChemin();
+
+   // trace suite chemin jusqu'à sortie de chemin
+   /*while(resultat!=QPoint(0,0)&&
+         (resultat.x()<=largeur)&&
+         (resultat.x()>=0)&&
+         (resultat.y()>=0)&&
+         (resultat.y()<=hauteur))*/
+   while(resultat!=QPoint(0,0))
+   {
+
+       if (croisement(resultat)==false){
+      tracerZone(resultat);
+      point_release.setX(resultat.x()+(point_release.x()-point_click.x()));
+      point_release.setY(resultat.y()+(point_release.y()-point_click.y()));
+
+      point_click.setX(resultat.x());
+      point_click.setY(resultat.y());
+
+      resultat=directionChemin();
+       }
+       else {resultat.setX(0); resultat.setY(0);}
+   }
 
 
+  //      std::cout<<"new point  de base: "<<point_click.x()<<" "<<point_click.y()<<std::endl;
+  //      std::cout<<"new release x: "<<point_release.x()<<" new release y: "<<point_release.y()<<std::endl;
+
+update();
 }
 
 
 
+QPoint carte::directionChemin(){
+    int margeErreur=3;
+    int choix=0;
+
+    //if (croisement(point_click)){
+
+    //0: arret   1: gauche   2:haut    3:droite   4: bas    21:HG     23:HD     41:BG      43:BD
+    QPoint ancienneOrientation (point_release.x()-point_click.x(),point_release.y()-point_click.y());
+    if (ancienneOrientation==QPoint(-etendueZone,0)) choix=1;
+    else if (ancienneOrientation==QPoint(0,-etendueZone)) choix=2;
+    else if (ancienneOrientation==QPoint(etendueZone,0)) choix=3;
+    else if (ancienneOrientation==QPoint(0,etendueZone)) choix=4;
+    else if (ancienneOrientation==QPoint(-etendueZone,-etendueZone)) choix=21;
+    else if (ancienneOrientation==QPoint(etendueZone,-etendueZone)) choix=23;
+    else if (ancienneOrientation==QPoint(-etendueZone,etendueZone)) choix=41;
+    else if (ancienneOrientation==QPoint(etendueZone,etendueZone)) choix=43;
+
+    switch (choix){
+    //gauche
+            case (1):
+    {
+                int gauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y())));
+                if (gauche>margeErreur)return QPoint(point_click.x()-etendueZone,point_click.y());
+                else{
+                     int haut=(analyzeZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
+                     int bas=(analyzeZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
+                     int hautGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
+                     int basGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                     int nouvelleOrientation= maximum(basGauche,maximum(hautGauche,(maximum(haut,bas))));
+                     if (nouvelleOrientation>margeErreur){
+                        if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
+                        else if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()+etendueZone);
+                        else if(nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                        else if (nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
+                    }
+
+                else{
+                        int haut=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
+                        int bas=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                        int nouvelleOrientation= maximum(haut,bas);
+                        if (nouvelleOrientation>margeErreur){
+                            if (nouvelleOrientation == haut) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                            else if (nouvelleOrientation == bas) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                        }
+                    }
+                }
+            }
+            break;
+
+    //haut
+            case (2):
+    {
+                int haut=(analyzeZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
+                if(haut>margeErreur)return QPoint(point_click.x(),point_click.y()-etendueZone);
+                else{
+                    int gauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y())));
+                    int droite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y())));
+                    int hautGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
+                    int hautDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
+                    int nouvelleOrientation= maximum(hautGauche,maximum(hautDroite,(maximum(droite,gauche))));
+                    if (nouvelleOrientation>margeErreur){
+                        if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
+                        else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
+                        else if(nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                        else if (nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                    }
+
+                else{
+                         int gauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                         int droite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                         int nouvelleOrientation= maximum(gauche,droite);
+                         if (nouvelleOrientation>margeErreur){
+                             if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
+                             else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                        }
+                    }
+                }
+            }
+            break;
+
+        //droite
+            case (3):
+
+        {
+                int droite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y())));
+                if (droite>margeErreur)return QPoint(point_click.x()+etendueZone,point_click.y());
+                else{
+                       int haut=(analyzeZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
+                       int bas=(analyzeZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
+                       int hautDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
+                       int basDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                       int nouvelleOrientation= maximum(basDroite,maximum(hautDroite,(maximum(haut,bas))));
+                       if (nouvelleOrientation>margeErreur){
+                          if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
+                          else if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()+etendueZone);
+                          else if(nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                          else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                      }
+
+                else{
+                          int haut=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
+                          int bas=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                          int nouvelleOrientation= maximum(haut,bas);
+                          if (nouvelleOrientation>margeErreur){
+                              if (nouvelleOrientation == haut) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                              else if (nouvelleOrientation == bas) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
+                        }
+                    }
+                }
+            }
+            break;
+
+    //bas
+            case (4):
+        {
+                int bas=(analyzeZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
+                if(bas>margeErreur)return QPoint(point_click.x(),point_click.y()+etendueZone);
+                else{
+                    int gauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y())));
+                    int droite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y())));
+                    int basGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                    int basDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                    int nouvelleOrientation= maximum(basGauche,maximum(basDroite,(maximum(droite,gauche))));
+                    if (nouvelleOrientation>margeErreur){
+                        if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
+                        else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
+                        else if(nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
+                        else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                    }
+                else{
+                         int gauche=analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone));
+                         int droite=analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone));
+                         int nouvelleOrientation= maximum(gauche,droite);
+                         if (nouvelleOrientation>margeErreur){
+                             if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                             else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                            }
+                        }
+                    }
+                }
+                break;
+
+        //HG
+                case (21):
+        {
+                    int hautGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
+                    if(hautGauche>margeErreur)return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                    else{
+                        int haut=(analyzeZone(QPoint(point_click.x(),point_click.y()-etendueZone)));
+                        int gauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y())));
+                        int basGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                        int hautDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
+                        int nouvelleOrientation=maximum(gauche,maximum(haut,maximum(basGauche,hautDroite)));
+                        if (nouvelleOrientation>margeErreur){
+                            if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
+                            else if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
+                            else if (nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
+                            else if (nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                        }
+                        else {
+                            int basGauche=analyzeZone(QPoint(point_click.x(),point_click.y()+2*etendueZone));
+                            int hautDroite=analyzeZone(QPoint(point_click.x()+2*etendueZone,point_click.y()));
+                            int nouvelleOrientation=maximum(basGauche,hautDroite);
+                            if (nouvelleOrientation>margeErreur){
+                                if (nouvelleOrientation==basGauche) return QPoint(point_click.x(),point_click.y()+2*etendueZone);
+                                if (nouvelleOrientation==hautDroite) return QPoint(point_click.x()+2*etendueZone,point_click.y());
+                            }
+                        }
+                    }
+                }
+                break;
+
+        //HD
+                case (23):
+        {
+                    int hautDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
+                    if(hautDroite>margeErreur)return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                    else
+                    {
+                        int haut=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y())));
+                        int droite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y())));
+                        int basDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                        int hautGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
+
+                        int nouvelleOrientation=maximum(droite,maximum(haut,maximum(basDroite,hautGauche)));
+                        if (nouvelleOrientation>margeErreur){
+                            if (nouvelleOrientation == haut) return QPoint(point_click.x(),point_click.y()-etendueZone);
+                            else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
+                            else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                            else if (nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                        }
+                        else {
+                            int hautGauche=analyzeZone(QPoint(point_click.x()-2*etendueZone,point_click.y()));
+                            int basDroite=analyzeZone(QPoint(point_click.x(),point_click.y()+2*etendueZone));
+                            int nouvelleOrientation=maximum(hautGauche,basDroite);
+                            if (nouvelleOrientation>margeErreur){
+                                if (nouvelleOrientation==hautGauche) return QPoint(point_click.x()-2*etendueZone,point_click.y());
+                                if (nouvelleOrientation==basDroite) return QPoint(point_click.x(),point_click.y()+2*etendueZone);
+                            }
+                        }
+                    }
+                }
+                break;
+
+        //BG
+                case (41):
+
+         {
+                    int basGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                    if(basGauche>margeErreur)return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                    else
+                    {
+                        int bas=(analyzeZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
+                        int gauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y())));
+                        int basDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                        int hautGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone)));
+
+                        int nouvelleOrientation=maximum(gauche,maximum(bas,maximum(basDroite,hautGauche)));
+                        if (nouvelleOrientation>margeErreur){
+                            if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()+etendueZone);
+                            else if (nouvelleOrientation == gauche) return QPoint(point_click.x()-etendueZone,point_click.y());
+                            else if (nouvelleOrientation == basDroite) return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                            else if (nouvelleOrientation == hautGauche) return QPoint(point_click.x()-etendueZone,point_click.y()-etendueZone);
+                        }
+                        else {
+                            int hautGauche=analyzeZone(QPoint(point_click.x(),point_click.y()-2*etendueZone));
+                            int basDroite=analyzeZone(QPoint(point_click.x()+2*etendueZone,point_click.y()));
+                            int nouvelleOrientation=maximum(hautGauche,basDroite);
+                            if (nouvelleOrientation>margeErreur){
+                                if (nouvelleOrientation==hautGauche) return QPoint(point_click.x(),point_click.y()-2*etendueZone);
+                                if (nouvelleOrientation==basDroite) return QPoint(point_click.x()+2*etendueZone,point_click.y());
+                            }
+                        }
+                    }
+                }
+                break;
+
+        //BD
+                case (43):
+        {
+                        int basDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone)));
+                        if(basDroite>margeErreur)return QPoint(point_click.x()+etendueZone,point_click.y()+etendueZone);
+                        else{
+                        int bas=(analyzeZone(QPoint(point_click.x(),point_click.y()+etendueZone)));
+                        int droite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y())));
+                        int basGauche=(analyzeZone(QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone)));
+                        int hautDroite=(analyzeZone(QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone)));
+                        int nouvelleOrientation=maximum(droite,maximum(bas,maximum(basGauche,hautDroite)));
+                        if (nouvelleOrientation>margeErreur){
+                            if (nouvelleOrientation == bas) return QPoint(point_click.x(),point_click.y()-etendueZone);
+                            else if (nouvelleOrientation == droite) return QPoint(point_click.x()+etendueZone,point_click.y());
+                            else if (nouvelleOrientation == basGauche) return QPoint(point_click.x()-etendueZone,point_click.y()+etendueZone);
+                            else if (nouvelleOrientation == hautDroite) return QPoint(point_click.x()+etendueZone,point_click.y()-etendueZone);
+                        }
+                            else {
+                                int basGauche=analyzeZone(QPoint(point_click.x(),point_click.y()-2*etendueZone));
+                                int hautDroite=analyzeZone(QPoint(point_click.x()-2*etendueZone,point_click.y()));
+                                int nouvelleOrientation=maximum(basGauche,hautDroite);
+                                if (nouvelleOrientation>margeErreur){
+                                    if (nouvelleOrientation==basGauche) return QPoint(point_click.x(),point_click.y()-2*etendueZone);
+                                    if (nouvelleOrientation==hautDroite) return QPoint(point_click.x()-2*etendueZone,point_click.y());
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                }
+                return QPoint(0,0);
+    }
 
 
+void carte::parcoursImageAffichage(){
+
+    //parcourir toute la carte
+    for (int i=0;i<largeur;i++){
+         for (int j=0; j<hauteur;j++){
+             if (comparerCouleurAvecMarge(coul, imageCarte->pixel(i,j))==true)
+                {imageCarte->setPixel(QPoint(i,j),0xFF00FF00);}
+            // else {imageAffichage->setPixel(QPoint(i,j),0xFFFFFF);}
+           // std::cout<<"couleur : "<<coul<<std::endl;}
+             //imageCarte->setPixel(QPoint(i,j));
+         }
+     }
+
+}
 
 /*************************Brouillon  algo******************************************
 
